@@ -60,26 +60,41 @@ function safeParseExtraction(text: string): ExtractedPOD {
 }
 
 async function extractFromPdf(buffer: Buffer): Promise<ExtractedPOD> {
-  // Send PDF as base64 directly to Claude — no external OCR needed
-  const base64 = buffer.toString("base64");
+  // Extract text from PDF buffer using basic string parsing
+  // Avoids pdfjs-dist which requires browser APIs not available in Node
+  const raw = buffer.toString("latin1");
+  const textChunks: string[] = [];
+  const regex = /BT[\s\S]*?ET/g;
+  let match;
+  while ((match = regex.exec(raw)) !== null) {
+    const block = match[0];
+    const tjMatches = block.match(/\(([^)]+)\)\s*Tj/g) || [];
+    const tfMatches = block.match(/\[([^\]]+)\]\s*TJ/g) || [];
+    for (const m of tjMatches) {
+      const t = m.match(/\(([^)]+)\)/);
+      if (t) textChunks.push(t[1]);
+    }
+    for (const m of tfMatches) {
+      const inner = m.replace(/[\[\]]/g, "");
+      const parts = inner.match(/\(([^)]+)\)/g) || [];
+      for (const p of parts) textChunks.push(p.replace(/[()]/g, ""));
+    }
+  }
+  const rawText = textChunks.join(" ").replace(/\s+/g, " ").trim();
+
+  if (!rawText || rawText.length < 20) {
+    return {
+      customer: "Unknown", reference: "Unknown", destination: "Unknown",
+      driver: "Unknown",
+      delivered_at: new Date().toISOString().slice(0, 16).replace("T", " "),
+      amount: "R0", signature: false, confidence: 20, quality: "Poor",
+    };
+  }
 
   const message = await anthropic.messages.create({
     model: "claude-haiku-4-5",
     max_tokens: 1024,
-    messages: [{
-      role: "user",
-      content: [
-        {
-          type: "document",
-          source: {
-            type: "base64",
-            media_type: "application/pdf",
-            data: base64,
-          },
-        } as unknown as Anthropic.TextBlockParam,
-        { type: "text", text: EXTRACTION_PROMPT },
-      ],
-    }],
+    messages: [{ role: "user", content: `${EXTRACTION_PROMPT}\n\nPOD TEXT:\n${rawText.slice(0, 6000)}` }],
   });
 
   const text = message.content[0].type === "text" ? message.content[0].text : "";
