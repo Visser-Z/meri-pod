@@ -149,27 +149,30 @@ export async function POST(req: NextRequest) {
 
     const podId = generatePodId();
 
-    await db.query(
-      `INSERT INTO deliveries (id, company_id, customer, reference, destination, driver,
-       delivered_at, status, confidence, amount, signature, match, quality, issues, file_url, raw_extraction)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-      [podId, companyId, extracted.customer, extracted.reference, extracted.destination,
-       extracted.driver, extracted.delivered_at, "Needs review", extracted.confidence,
-       extracted.amount, extracted.signature, true, extracted.quality,
-       JSON.stringify(issues), null, JSON.stringify({ extracted })]
-    );
-
-    const auditEvents = [
-      { label: "POD uploaded", detail: `${file.name} accepted.`, actor: "Operator" },
-      { label: "AI extraction completed", detail: `${extracted.confidence}% confidence.`, actor: "Meri" },
-      ...(issues.length ? [{ label: "Exceptions detected", detail: issues.join(", "), actor: "Meri" }] : []),
-    ];
-
-    for (const e of auditEvents) {
+    // Save to DB — non-blocking, won't crash the request if it fails
+    try {
       await db.query(
-        `INSERT INTO audit_events (delivery_id, actor, label, detail) VALUES ($1,$2,$3,$4)`,
-        [podId, e.actor, e.label, e.detail]
+        `INSERT INTO deliveries (id, company_id, customer, reference, destination, driver,
+         delivered_at, status, confidence, amount, signature, match, quality, issues, file_url, raw_extraction)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+        [podId, companyId, extracted.customer, extracted.reference, extracted.destination,
+         extracted.driver, extracted.delivered_at, "Needs review", extracted.confidence,
+         extracted.amount, extracted.signature, true, extracted.quality,
+         JSON.stringify(issues), null, JSON.stringify({ extracted })]
       );
+      const auditEventsDb = [
+        { label: "POD uploaded", detail: `${file.name} accepted.`, actor: "Operator" },
+        { label: "AI extraction completed", detail: `${extracted.confidence}% confidence.`, actor: "Meri" },
+        ...(issues.length ? [{ label: "Exceptions detected", detail: issues.join(", "), actor: "Meri" }] : []),
+      ];
+      for (const e of auditEventsDb) {
+        await db.query(
+          `INSERT INTO audit_events (delivery_id, actor, label, detail) VALUES ($1,$2,$3,$4)`,
+          [podId, e.actor, e.label, e.detail]
+        );
+      }
+    } catch (dbErr) {
+      console.error("DB save failed (non-fatal):", dbErr);
     }
 
     return NextResponse.json({
