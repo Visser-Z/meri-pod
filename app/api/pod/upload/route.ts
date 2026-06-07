@@ -60,24 +60,26 @@ function safeParseExtraction(text: string): ExtractedPOD {
 }
 
 async function extractFromPdf(buffer: Buffer): Promise<ExtractedPOD> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pdfParse = (await import("pdf-parse") as any).default ?? (await import("pdf-parse") as any);
-  const parsed = await pdfParse(buffer);
-  const rawText = parsed.text?.trim();
-
-  if (!rawText || rawText.length < 20) {
-    return {
-      customer: "Unknown", reference: "Unknown", destination: "Unknown",
-      driver: "Unknown",
-      delivered_at: new Date().toISOString().slice(0, 16).replace("T", " "),
-      amount: "R0", signature: false, confidence: 20, quality: "Poor",
-    };
-  }
+  // Send PDF as base64 directly to Claude — no external OCR needed
+  const base64 = buffer.toString("base64");
 
   const message = await anthropic.messages.create({
     model: "claude-haiku-4-5",
     max_tokens: 1024,
-    messages: [{ role: "user", content: `${EXTRACTION_PROMPT}\n\nPOD TEXT:\n${rawText.slice(0, 6000)}` }],
+    messages: [{
+      role: "user",
+      content: [
+        {
+          type: "document",
+          source: {
+            type: "base64",
+            media_type: "application/pdf",
+            data: base64,
+          },
+        } as unknown as Anthropic.TextBlockParam,
+        { type: "text", text: EXTRACTION_PROMPT },
+      ],
+    }],
   });
 
   const text = message.content[0].type === "text" ? message.content[0].text : "";
