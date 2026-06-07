@@ -149,6 +149,12 @@ export async function POST(req: NextRequest) {
 
     const podId = generatePodId();
 
+    const auditEvents = [
+      { label: "POD uploaded", detail: `${file.name} accepted.`, actor: "Operator" },
+      { label: "AI extraction completed", detail: `${extracted.confidence}% confidence.`, actor: "Meri" },
+      ...(issues.length ? [{ label: "Exceptions detected", detail: issues.join(", "), actor: "Meri" }] : []),
+    ];
+
     // Save to DB — non-blocking, won't crash the request if it fails
     try {
       await db.query(
@@ -160,12 +166,7 @@ export async function POST(req: NextRequest) {
          extracted.amount, extracted.signature, true, extracted.quality,
          JSON.stringify(issues), null, JSON.stringify({ extracted })]
       );
-      const auditEventsDb = [
-        { label: "POD uploaded", detail: `${file.name} accepted.`, actor: "Operator" },
-        { label: "AI extraction completed", detail: `${extracted.confidence}% confidence.`, actor: "Meri" },
-        ...(issues.length ? [{ label: "Exceptions detected", detail: issues.join(", "), actor: "Meri" }] : []),
-      ];
-      for (const e of auditEventsDb) {
+      for (const e of auditEvents) {
         await db.query(
           `INSERT INTO audit_events (delivery_id, actor, label, detail) VALUES ($1,$2,$3,$4)`,
           [podId, e.actor, e.label, e.detail]
