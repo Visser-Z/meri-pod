@@ -2,18 +2,32 @@
 
 export const dynamic = "force-dynamic";
 
-import { useRef, useState, useEffect } from "react";
-import { useRouter, useParams, useSearchParams } from "next/navigation";
+import { useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft, MapPin, Navigation, Camera, FileText,
-  CheckCircle2, Pen, RotateCcw, Loader2, Package
+  CheckCircle2, RotateCcw, Loader2, Package, ChevronRight
 } from "lucide-react";
 
 type Step = "detail" | "sign" | "upload" | "done";
 
+const S = {
+  app: { display: "flex", flexDirection: "column" as const, height: "100dvh", maxWidth: 430, margin: "0 auto", background: "#0d1117", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", WebkitFontSmoothing: "antialiased", overflow: "hidden" },
+  screen: { flex: 1, overflowY: "auto" as const, display: "flex", flexDirection: "column" as const },
+  header: { display: "flex", alignItems: "center", gap: 12, padding: "52px 20px 16px", background: "#010409", flexShrink: 0 },
+  backBtn: { width: 36, height: 36, borderRadius: "50%", background: "#161b22", border: "1px solid #30363d", display: "grid", placeItems: "center", cursor: "pointer", color: "#8b949e", flexShrink: 0 },
+  ctaBtn: { display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 56, borderRadius: 16, background: "#c8ff00", color: "#000", fontSize: 16, fontWeight: 700, border: "none", cursor: "pointer", width: "100%", letterSpacing: "-0.01em" },
+  ghostBtn: { display: "flex", alignItems: "center", justifyContent: "center", gap: 6, height: 44, borderRadius: 12, background: "none", border: "1px solid #30363d", color: "#8b949e", fontSize: 13, cursor: "pointer", width: "100%" },
+  navBtn: { display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 52, borderRadius: 16, background: "#161b22", border: "1px solid #30363d", color: "#e6edf3", fontSize: 15, fontWeight: 600, textDecoration: "none", width: "100%" },
+  infoCard: { margin: "12px 20px", padding: 18, background: "#161b22", border: "1px solid #30363d", borderRadius: 18, display: "flex", flexDirection: "column" as const, gap: 16 },
+  infoRow: { display: "flex", alignItems: "flex-start", gap: 14 },
+  infoLabel: { fontSize: 10, fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.08em", color: "#8b949e", marginBottom: 3, display: "block" },
+  infoValue: { fontSize: 15, fontWeight: 500, color: "#e6edf3", lineHeight: 1.4 },
+  uploadOption: { display: "flex", alignItems: "center", gap: 14, padding: 18, background: "#161b22", border: "1px solid #30363d", borderRadius: 16, cursor: "pointer", width: "100%" },
+};
+
 export default function DeliveryDetailPage() {
   const router = useRouter();
-  const params = useParams();
   const searchParams = useSearchParams();
 
   const customer = searchParams.get("customer") || "Unknown";
@@ -23,65 +37,46 @@ export default function DeliveryDetailPage() {
 
   const [step, setStep] = useState<Step>("detail");
   const [uploading, setUploading] = useState(false);
-  const [mapLoaded, setMapLoaded] = useState(false);
-
-  // Signature pad
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const drawing = useRef(false);
   const [hasSig, setHasSig] = useState(false);
 
-  // Encode destination for OpenStreetMap
-  const mapSrc = `https://www.openstreetmap.org/export/embed.html?bbox=18.3,-34.1,18.7,-33.8&layer=mapnik&marker=${encodeURIComponent(destination)}`;
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawing = useRef(false);
+
   const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
 
-  // Signature pad handlers
   function getPos(e: React.TouchEvent | React.MouseEvent, canvas: HTMLCanvasElement) {
     const rect = canvas.getBoundingClientRect();
-    if ("touches" in e) {
-      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
-    }
+    if ("touches" in e) return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
     return { x: (e as React.MouseEvent).clientX - rect.left, y: (e as React.MouseEvent).clientY - rect.top };
   }
 
   function startDraw(e: React.TouchEvent | React.MouseEvent) {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    e.preventDefault();
-    drawing.current = true;
+    const canvas = canvasRef.current; if (!canvas) return;
+    e.preventDefault(); drawing.current = true;
     const ctx = canvas.getContext("2d")!;
     const pos = getPos(e, canvas);
-    ctx.beginPath();
-    ctx.moveTo(pos.x, pos.y);
+    ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
   }
 
   function draw(e: React.TouchEvent | React.MouseEvent) {
     if (!drawing.current) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const canvas = canvasRef.current; if (!canvas) return;
     e.preventDefault();
     const ctx = canvas.getContext("2d")!;
-    ctx.strokeStyle = "#c8ff00";
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = "round";
+    ctx.strokeStyle = "#c8ff00"; ctx.lineWidth = 2.5; ctx.lineCap = "round";
     const pos = getPos(e, canvas);
-    ctx.lineTo(pos.x, pos.y);
-    ctx.stroke();
+    ctx.lineTo(pos.x, pos.y); ctx.stroke();
     setHasSig(true);
   }
 
-  function endDraw() { drawing.current = false; }
-
   function clearSig() {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d")!;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const canvas = canvasRef.current; if (!canvas) return;
+    canvas.getContext("2d")!.clearRect(0, 0, canvas.width, canvas.height);
     setHasSig(false);
   }
 
-  async function handlePODUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return;
     setUploading(true);
     try {
       const form = new FormData();
@@ -98,174 +93,155 @@ export default function DeliveryDetailPage() {
   }
 
   return (
-    <div className="driver-app">
-      <div className="driver-screen" style={{ paddingBottom: 0 }}>
+    <div style={S.app}>
+      <div style={S.screen}>
 
-        {/* ── Detail step ── */}
+        {/* Detail */}
         {step === "detail" && (
           <>
-            <div className="driver-app-header" style={{ position: "relative" }}>
-              <button className="driver-back-btn" onClick={() => router.back()}>
-                <ArrowLeft size={18} />
-              </button>
-              <div style={{ flex: 1, textAlign: "center" }}>
-                <p style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Dropoff order</p>
-                <h2 style={{ fontSize: 16, fontWeight: 700 }}>{customer}</h2>
-                <p style={{ fontSize: 12, color: "var(--text-muted)" }}>{reference}</p>
+            <div style={S.header}>
+              <button style={S.backBtn} onClick={() => router.back()}><ArrowLeft size={16} /></button>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 11, color: "#8b949e", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Dropoff order</p>
+                <h2 style={{ fontSize: 18, fontWeight: 700, color: "#e6edf3", letterSpacing: "-0.01em" }}>{customer}</h2>
+                <p style={{ fontSize: 13, color: "#8b949e", marginTop: 1 }}>{reference}</p>
               </div>
-              <div style={{ width: 40 }} />
             </div>
 
-            {/* Map */}
-            <div className="driver-map-container">
-              {!mapLoaded && (
-                <div className="driver-map-placeholder">
-                  <MapPin size={24} color="var(--accent)" />
-                  <span>{destination}</span>
+            <div style={S.infoCard}>
+              <div style={S.infoRow}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: "#1a2600", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                  <MapPin size={16} color="#c8ff00" />
                 </div>
-              )}
-              <iframe
-                src={mapSrc}
-                className="driver-map-iframe"
-                style={{ opacity: mapLoaded ? 1 : 0 }}
-                onLoad={() => setMapLoaded(true)}
-                title="Delivery location"
-              />
-            </div>
-
-            {/* Delivery info card */}
-            <div className="driver-detail-card">
-              <div className="driver-detail-row">
-                <MapPin size={16} color="var(--accent)" />
                 <div>
-                  <p style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Address</p>
-                  <p style={{ fontSize: 14, fontWeight: 500 }}>{destination}</p>
+                  <span style={S.infoLabel}>Delivery address</span>
+                  <span style={S.infoValue}>{destination}</span>
                 </div>
               </div>
-              <div className="driver-detail-row">
-                <Package size={16} color="var(--text-info)" />
+              <div style={{ height: 1, background: "#30363d" }} />
+              <div style={S.infoRow}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: "#0c2041", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                  <Package size={16} color="#58a6ff" />
+                </div>
                 <div>
-                  <p style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Invoice value</p>
-                  <p style={{ fontSize: 14, fontWeight: 500 }}>{amount}</p>
+                  <span style={S.infoLabel}>Invoice value</span>
+                  <span style={{ ...S.infoValue, fontSize: 20, fontWeight: 700, color: "#e6edf3" }}>{amount}</span>
                 </div>
               </div>
             </div>
 
-            {/* Actions */}
-            <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 10 }}>
-              <a href={navUrl} target="_blank" rel="noopener noreferrer" className="driver-nav-action-btn">
-                <Navigation size={18} /> Navigate
+            <div style={{ padding: "8px 20px 24px", display: "flex", flexDirection: "column", gap: 10 }}>
+              <a href={navUrl} target="_blank" rel="noopener noreferrer" style={S.navBtn}>
+                <Navigation size={18} color="#58a6ff" /> Open in Maps
               </a>
-              <button className="driver-cta-btn" onClick={() => setStep("sign")}>
+              <button style={S.ctaBtn} onClick={() => setStep("sign")}>
                 Arrive at dropoff →
               </button>
             </div>
           </>
         )}
 
-        {/* ── Signature step ── */}
+        {/* Signature */}
         {step === "sign" && (
           <>
-            <div className="driver-app-header">
-              <button className="driver-back-btn" onClick={() => setStep("detail")}>
-                <ArrowLeft size={18} />
-              </button>
-              <div style={{ flex: 1, textAlign: "center" }}>
-                <h2 style={{ fontSize: 16, fontWeight: 700 }}>Driver&apos;s signature</h2>
-                <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Sign to confirm delivery</p>
+            <div style={S.header}>
+              <button style={S.backBtn} onClick={() => setStep("detail")}><ArrowLeft size={16} /></button>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 11, color: "#8b949e", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Step 1 of 2</p>
+                <h2 style={{ fontSize: 18, fontWeight: 700, color: "#e6edf3" }}>Driver signature</h2>
               </div>
-              <div style={{ width: 40 }} />
             </div>
 
-            <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
-              <div className="driver-sig-container">
+            <div style={{ padding: "8px 20px 0", display: "flex", flexDirection: "column", gap: 12 }}>
+              <p style={{ fontSize: 13, color: "#8b949e" }}>Sign with your finger to confirm this delivery</p>
+              <div style={{ background: "#161b22", border: `1px solid ${hasSig ? "#238636" : "#30363d"}`, borderRadius: 18, padding: 16, transition: "border-color 200ms" }}>
                 <canvas
                   ref={canvasRef}
-                  width={340}
-                  height={220}
-                  className="driver-sig-canvas"
+                  width={360}
+                  height={200}
+                  style={{ width: "100%", borderRadius: 10, background: "#0d1117", touchAction: "none", cursor: "crosshair", display: "block" }}
                   onMouseDown={startDraw}
                   onMouseMove={draw}
-                  onMouseUp={endDraw}
+                  onMouseUp={() => { drawing.current = false; }}
                   onTouchStart={startDraw}
                   onTouchMove={draw}
-                  onTouchEnd={endDraw}
+                  onTouchEnd={() => { drawing.current = false; }}
                 />
-                <p style={{ fontSize: 11, color: "var(--text-subtle)", textAlign: "center", marginTop: 8 }}>Sign above</p>
+                <p style={{ fontSize: 11, color: "#484f58", textAlign: "center", marginTop: 8 }}>Sign above</p>
               </div>
 
-              <button className="driver-ghost-btn" onClick={clearSig}>
-                <RotateCcw size={14} /> Clear signature
+              <button style={S.ghostBtn} onClick={clearSig}>
+                <RotateCcw size={14} /> Clear
               </button>
 
-              <button
-                className="driver-cta-btn"
-                disabled={!hasSig}
-                onClick={() => setStep("upload")}
-                style={{ opacity: hasSig ? 1 : 0.4 }}
-              >
-                Confirm →
+              <button style={{ ...S.ctaBtn, opacity: hasSig ? 1 : 0.4 }} disabled={!hasSig} onClick={() => setStep("upload")}>
+                Confirm signature →
               </button>
             </div>
           </>
         )}
 
-        {/* ── Upload step ── */}
+        {/* Upload */}
         {step === "upload" && (
           <>
-            <div className="driver-app-header">
-              <button className="driver-back-btn" onClick={() => setStep("sign")}>
-                <ArrowLeft size={18} />
-              </button>
-              <div style={{ flex: 1, textAlign: "center" }}>
-                <h2 style={{ fontSize: 16, fontWeight: 700 }}>Upload POD</h2>
-                <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Photo or PDF of signed delivery note</p>
+            <div style={S.header}>
+              <button style={S.backBtn} onClick={() => setStep("sign")}><ArrowLeft size={16} /></button>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 11, color: "#8b949e", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Step 2 of 2</p>
+                <h2 style={{ fontSize: 18, fontWeight: 700, color: "#e6edf3" }}>Upload POD</h2>
               </div>
-              <div style={{ width: 40 }} />
             </div>
 
-            <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
-              <label className="driver-upload-option">
-                <Camera size={24} color="var(--accent)" />
-                <div>
-                  <strong>Take a photo</strong>
-                  <span>Use your camera to photograph the POD</span>
+            <div style={{ padding: "8px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+              <p style={{ fontSize: 13, color: "#8b949e", marginBottom: 4 }}>Photograph or upload the signed delivery note</p>
+
+              <label style={S.uploadOption}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: "#1a2600", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                  <Camera size={22} color="#c8ff00" />
                 </div>
-                <input type="file" accept="image/*" capture="environment" onChange={handlePODUpload} style={{ display: "none" }} />
+                <div style={{ flex: 1, textAlign: "left" }}>
+                  <strong style={{ display: "block", fontSize: 15, fontWeight: 600, color: "#e6edf3" }}>Take a photo</strong>
+                  <span style={{ fontSize: 12, color: "#8b949e" }}>Use your camera</span>
+                </div>
+                <ChevronRight size={16} color="#484f58" />
+                <input type="file" accept="image/*" capture="environment" onChange={handleUpload} style={{ display: "none" }} />
               </label>
 
-              <label className="driver-upload-option">
-                <FileText size={24} color="var(--text-info)" />
-                <div>
-                  <strong>Upload file</strong>
-                  <span>PDF or image from your device</span>
+              <label style={S.uploadOption}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: "#0c2041", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                  <FileText size={22} color="#58a6ff" />
                 </div>
-                <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={handlePODUpload} style={{ display: "none" }} />
+                <div style={{ flex: 1, textAlign: "left" }}>
+                  <strong style={{ display: "block", fontSize: 15, fontWeight: 600, color: "#e6edf3" }}>Upload file</strong>
+                  <span style={{ fontSize: 12, color: "#8b949e" }}>PDF or image from device</span>
+                </div>
+                <ChevronRight size={16} color="#484f58" />
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={handleUpload} style={{ display: "none" }} />
               </label>
 
               {uploading && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: 20, color: "var(--text-muted)" }}>
-                  <Loader2 size={18} style={{ animation: "spin 600ms linear infinite" }} />
-                  <span>Processing POD…</span>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: 20, color: "#8b949e", fontSize: 14 }}>
+                  <Loader2 size={18} style={{ animation: "spin 600ms linear infinite", color: "#c8ff00" }} />
+                  Processing POD…
                 </div>
               )}
             </div>
           </>
         )}
 
-        {/* ── Done step ── */}
+        {/* Done */}
         {step === "done" && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, padding: 32, gap: 20, textAlign: "center" }}>
-            <div style={{ width: 72, height: 72, borderRadius: "50%", background: "var(--bg-pill-success)", border: "2px solid var(--border-success)", display: "grid", placeItems: "center" }}>
-              <CheckCircle2 size={36} color="var(--text-success)" />
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 32, gap: 24, textAlign: "center" }}>
+            <div style={{ width: 80, height: 80, borderRadius: "50%", background: "#0d2818", border: "2px solid #238636", display: "grid", placeItems: "center" }}>
+              <CheckCircle2 size={40} color="#3fb950" />
             </div>
             <div>
-              <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Delivery complete</h2>
-              <p style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.6 }}>
-                {customer} has been marked as delivered. The POD has been submitted for review.
+              <h2 style={{ fontSize: 24, fontWeight: 700, color: "#e6edf3", marginBottom: 10, letterSpacing: "-0.02em" }}>Delivery complete</h2>
+              <p style={{ fontSize: 14, color: "#8b949e", lineHeight: 1.7 }}>
+                {customer} has been marked as delivered.<br />The POD has been submitted for review.
               </p>
             </div>
-            <button className="driver-cta-btn" style={{ width: "100%" }} onClick={() => router.push("/driver")}>
+            <button style={{ ...S.ctaBtn, marginTop: 8 }} onClick={() => router.push("/driver")}>
               Back to deliveries
             </button>
           </div>
